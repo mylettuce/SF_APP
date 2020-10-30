@@ -8,7 +8,7 @@ import "./App.css";
 import Icon from '@ant-design/icons';
 import {ReactComponent as ConveyorSvg} from "./CONVEYOR.svg"
 import {ReactComponent as HeatingSvg} from "./heater.svg"
-import {ReactComponent as SoundSvg} from "./sound.svg"
+//import {ReactComponent as SoundSvg} from "./sound.svg"
 import {ReactComponent as ValveSvg} from "./valve.svg"
 import {ReactComponent as pumpSvg} from "./pump.svg"
 import {ReactComponent as openUpSvg} from "./up-arrows-angles-couple.svg"
@@ -2325,7 +2325,7 @@ class App extends React.Component {
             //console.log(message, address) 
             let tempData = [...PLCMemory[address[0]]]
             //let { D, W, C } = this.state;
-            let { D } = PLCMemory;
+            //let { D } = PLCMemory;
             message.values.map((d, index)=>{
                 tempData[address[1]+index]=d;
                 return null;
