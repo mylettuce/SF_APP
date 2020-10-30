@@ -2330,9 +2330,9 @@ class App extends React.Component {
                 tempData[address[1]+index]=d;
                 return null;
             })
-            if (address[0] === "D") {
-                D = tempData;
-            }
+            //if (address[0] === "D") {
+            //    D = tempData;
+            //}
             //else if (address[0] === "W") {
             //    W = tempData;
             //}
