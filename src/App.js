@@ -2,7 +2,7 @@
 import React, { Fragment } from 'react';
 import { Button, Table, Switch, Typography, Row, Col, Tabs, Modal, InputNumber, Drawer, Descriptions, Divider, Popconfirm, Checkbox, Progress, Statistic, Card, Badge } from "antd";
 //import { TableOutlined } from '@ant-design/icons';
-import { LineChartOutlined, TableOutlined } from '@ant-design/icons';
+import { LineChartOutlined, TableOutlined, CaretRightOutlined, PauseOutlined } from '@ant-design/icons';
 import * as d3 from "d3";
 import "./App.css";
 import Icon from '@ant-design/icons';
@@ -10,7 +10,7 @@ import {ReactComponent as ConveyorSvg} from "./CONVEYOR.svg"
 import {ReactComponent as HeatingSvg} from "./heater.svg"
 //import {ReactComponent as SoundSvg} from "./sound.svg"
 import {ReactComponent as ValveSvg} from "./valve.svg"
-import {ReactComponent as pumpSvg} from "./pump.svg"
+//import {ReactComponent as pumpSvg} from "./pump.svg"
 import {ReactComponent as openUpSvg} from "./up-arrows-angles-couple.svg"
 
 //const fs = window.remote.require('fs')
@@ -316,12 +316,12 @@ class AlarmsModal extends React.Component {
     constructor(props) {
         super(props);
         this.state = {
-            filteredInfo: [true]
+            filteredInfo: ["NG"]
         }
     }
     handleChange = (pagination, filters, sorter) => {
         this.setState({
-            filteredInfo: filters
+            filteredInfo: filters.state,
         })
     }
     render() {
@@ -338,21 +338,21 @@ class AlarmsModal extends React.Component {
                 dataIndex: "state",
                 width: 100,
                 render: (state) => (
-                    <Badge status={state?"error":"success"} />
+                    <Badge status={state==="NG"?"error":"success"} />
                 ),
                 align: "center",
                 filters: [
                     {
                         text: "Alarm",
-                        value: true,
+                        value: "NG",
                     },
                     {
                         text: "Normal",
-                        value: false,
+                        value: "OK",
                     },
                 ],
                 onFilter:(value, record) => record.state === value,
-                sorter: (a, b) => (a.state===b.state?0:(a.state===false?1:-1)),
+                sorter: (a, b) => (a.state===b.state?0:(a.state==="OK"?1:-1)),
                 filteredValue:this.state.filteredInfo,
             },
             {
@@ -364,13 +364,16 @@ class AlarmsModal extends React.Component {
             id: i,
             detail: d[0],
             address: d[1],
-            state: readPLC(d[1]),
+            state: readPLC(d[1])?"NG":"OK",
         }))
         return (
             <Modal
-                title="报警"
+                title="报警状态"
                 width={800}
                 onCancel={this.props.onClose}
+                cancelButtonProps={{style:{display:"none"}}}
+                onOk={this.props.onClose}
+                okText="关闭"
                 visible={this.props.visible}
             >
                 <Button onClick={()=>{AlarmConfirm()}} type="primary">确认并关闭报警</Button>
@@ -382,6 +385,7 @@ class AlarmsModal extends React.Component {
                     dataSource={data}
                     columns={columns}
                     bordered={false}
+                    onChange={this.handleChange}
                 />
             </Modal>
         )
@@ -411,10 +415,15 @@ class LoadingModal extends React.Component {
         if (prevProps.start===false && this.props.start===true) {
             readConfigFile()
             .then((data)=>{
-                this.setState({
-                    data,
-                    visible: true
-                })
+                if (data) {
+                    this.setState({
+                        data,
+                        visible: true
+                    })
+                }
+                else {
+                    this.props.onClose();
+                }
             });
         }
     }
@@ -563,7 +572,7 @@ class GasSettingDrawer extends React.Component {
                 title="气体参数设置"
                 width={680}
                 placement="left"
-                mask={false}
+                mask={true}
                 closable={true}
                 destroyOnClose={true}
                 maskClosable={false}
@@ -818,7 +827,7 @@ class WetterSettingDrawer extends React.Component {
                 title="加湿参数设置"
                 width={680}
                 placement="left"
-                mask={false}
+                mask={true}
                 closable={true}
                 destroyOnClose={true}
                 maskClosable={false}
@@ -1574,42 +1583,42 @@ class IconDisplayer extends React.Component {
     }
 }
 
-class IconControllor extends React.Component {
-    render() {
-        let matches = this.props.address.match(/([A-Z]*)([0-9]*):?([0-9]*)/)
-        let addr = +matches[2]
-        let bit = +matches[3]
-        return (
-            <>
-            <Row align="middle" gutter={[36, 0]}>
-                <Col>
-                    <StateIcon 
-                        component={this.props.icon} 
-                        run={(PLCMemory[this.props.address[0]][addr]&(1<<bit))===(1<<bit)} 
-                        rotate={this.props.rotate?this.props.rotate:0}
-                    />
-                </Col>
-                <Col flex="auto">
-                    <Switch 
-                        checkedChildren="ON"
-                        unCheckedChildren="OFF"
-                        checked={(PLCMemory[this.props.address[0]][addr]&(1<<bit))===(1<<bit)}
-                        onChange={(value)=>{
-                            //console.log("Main heating switch", value);
-                            window.ipcRenderer.send("plcWrite", this.props.address, value?1:0)
-                        }}
-                    />
-                </Col>
-            </Row>
-            <Row gutter={[36, 18]}>
-                <Col>
-                    {this.props.label}
-                </Col>
-            </Row>
-            </>  
-        )
-    }
-}
+//class IconControllor extends React.Component {
+//    render() {
+//        let matches = this.props.address.match(/([A-Z]*)([0-9]*):?([0-9]*)/)
+//        let addr = +matches[2]
+//        let bit = +matches[3]
+//        return (
+//            <>
+//            <Row align="middle" gutter={[36, 0]}>
+//                <Col>
+//                    <StateIcon 
+//                        component={this.props.icon} 
+//                        run={(PLCMemory[this.props.address[0]][addr]&(1<<bit))===(1<<bit)} 
+//                        rotate={this.props.rotate?this.props.rotate:0}
+//                    />
+//                </Col>
+//                <Col flex="auto">
+//                    <Switch 
+//                        checkedChildren="ON"
+//                        unCheckedChildren="OFF"
+//                        checked={(PLCMemory[this.props.address[0]][addr]&(1<<bit))===(1<<bit)}
+//                        onChange={(value)=>{
+//                            //console.log("Main heating switch", value);
+//                            window.ipcRenderer.send("plcWrite", this.props.address, value?1:0)
+//                        }}
+//                    />
+//                </Col>
+//            </Row>
+//            <Row gutter={[36, 18]}>
+//                <Col>
+//                    {this.props.label}
+//                </Col>
+//            </Row>
+//            </>  
+//        )
+//    }
+//}
 
 class ControlModal extends React.Component{
     render() {
@@ -1667,9 +1676,9 @@ class ControlModal extends React.Component{
                                         style={{marginBottom:18}}
                                     />
                                 </Col>
-                            </Row>*/}
+                            </Row>
                             <IconControllor address="WB0291:12" icon={pumpSvg} label="风淋PUMP" rotate={90}/>
-                            <IconControllor address="WB0291:13" icon={pumpSvg} label="入口排水" rotate={90}/>
+                            <IconControllor address="WB0291:13" icon={pumpSvg} label="入口排水" rotate={90}/>*/}
                         </Col>
                         <Col span={12}>
                             <Row align="middle" gutter={[36, 18]}>
@@ -1702,6 +1711,7 @@ class ControlModal extends React.Component{
                                     />
                                 </Col>
                             </Row>
+                            {/*
                             <Row align="middle" gutter={[36, 18]}>
                                 <Col><StateIcon component={ValveSvg} run={(PLCMemory.W[311]&0x10)===0x10}/>SonicAir</Col>
                                 <Col flex="auto">
@@ -1717,6 +1727,7 @@ class ControlModal extends React.Component{
                                     />
                                 </Col>
                             </Row>
+                            */}
                         </Col>
                     </Row>
             </Modal>
@@ -1965,7 +1976,7 @@ class MainInfoTable extends React.Component {
     render() {
         return (
             <div style={{padding: 8}}>
-            <Row align="top" gutter={[24, 8]}>
+            <Row align="top" gutter={[16, 0]}>
                 <Col span={8}>
                     <Row align="middle" gutter={[8, 8]}>
                         <Col span={24}>
@@ -2046,8 +2057,8 @@ class MainInfoTable extends React.Component {
                             <Card bodyStyle={{padding:"12px 36px"}}>
                             <Statistic
                                 title={<span>N<sub>2</sub> Bout 1~2</span>} 
-                                value={Math.round(PLCMemory.D[251])/10}
-                                suffix={<span> / {Math.round(PLCMemory.D[230])/10}</span>}
+                                value={Math.round(PLCMemory.D[251])}
+                                suffix={<span> / {Math.round(PLCMemory.D[230])}</span>}
                             />
                             </Card>
                         </Col>
@@ -2066,8 +2077,8 @@ class MainInfoTable extends React.Component {
                             <Card bodyStyle={{padding:"12px 36px"}}>
                             <Statistic
                                 title={<span>N<sub>2</sub> Bout 3~4</span>} 
-                                value={Math.round(PLCMemory.D[253])/10}
-                                suffix={<span> / {Math.round(PLCMemory.D[232])/10}</span>}
+                                value={Math.round(PLCMemory.D[253])}
+                                suffix={<span> / {Math.round(PLCMemory.D[232])}</span>}
                             />
                             </Card>
                         </Col>
@@ -2086,8 +2097,8 @@ class MainInfoTable extends React.Component {
                             <Card bodyStyle={{padding:"12px 36px"}}>
                             <Statistic
                                 title={<span>N<sub>2</sub> Bout 5~6</span>} 
-                                value={Math.round(PLCMemory.D[255])/10}
-                                suffix={<span> / {Math.round(PLCMemory.D[234])/10}</span>}
+                                value={Math.round(PLCMemory.D[255])}
+                                suffix={<span> / {Math.round(PLCMemory.D[234])}</span>}
                             />
                             </Card>
                         </Col>
@@ -2106,8 +2117,8 @@ class MainInfoTable extends React.Component {
                             <Card bodyStyle={{padding:"12px 36px"}}>
                             <Statistic
                                 title={<span>N<sub>2</sub> Bout 7/MR</span>} 
-                                value={Math.round(PLCMemory.D[257])/10}
-                                suffix={<span> / {Math.round(PLCMemory.D[236])/10}</span>}
+                                value={Math.round(PLCMemory.D[257])}
+                                suffix={<span> / {Math.round(PLCMemory.D[236])}</span>}
                             />
                             </Card>
                         </Col>
@@ -2425,6 +2436,14 @@ class App extends React.Component {
             ...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 3, 4, d=>(d/10))
             }
         ]
+        let headBtns = [
+            ["功能开关", "controlVisible"],
+            ["传送带设定", "conveyorSettingVisible"],
+            ["温度设定", "zoneTSVSettingVisible"],
+            ["升温设定", "warmUpSettingVisible"],
+            ["加湿设定", "wetterSettingVisible"],
+            ["气氛设定", "gasSettingVisible"],
+        ]
 
       return (
         <div className="App" style={{backgroundColor:"#FAFAFA", padding:10}}>
@@ -2477,6 +2496,51 @@ class App extends React.Component {
                     alarmVisible: false
                 })}}
             />
+          <div className="functionButtons">
+            <Row align="middle" gutter={[16, 4]}>
+                <Col>
+                    <Button type="primary" icon={<CaretRightOutlined />} onClick={()=> {
+                        this.setState({
+                            loadingStart: true
+                        })
+                    }}
+                    >
+                        启 动
+                    </Button>
+                </Col>
+                <Col>
+                    <Button type="primary" icon={<PauseOutlined />} onClick={()=>{
+                        this.SFMainStop();
+                    }}
+                    >
+                        停 止
+                    </Button>
+                </Col>
+                { headBtns.map((d)=>(
+                <Col key={d[0]}>
+                    <Button 
+                        type="primary" 
+                        onClick={()=>{
+                            this.setState({
+                                [d[1]]: true,
+                            })
+                        }}
+                    >
+                        {d[0]}
+                    </Button>
+                </Col>
+                ))}
+                <Col>
+                    <Badge count={AlarmCheck().length} overflowCount={999}>
+                        <Button type="primary" onClick={() => {
+                            this.setState({
+                                alarmVisible: true
+                            })
+                        }}>报 警</Button>
+                    </Badge>
+                </Col>
+            </Row>
+          </div>
           <Tabs type="card">
             <Tabs.TabPane tab={<span><LineChartOutlined />Zone Chart</span>} key="1">
               <ChartWrapper>
@@ -2491,18 +2555,19 @@ class App extends React.Component {
               <TemplateTable data={rzone} />
             </Tabs.TabPane>
           </Tabs>
-            <MainInfoTable />
-          <Divider style={{margin: "12px 0"}}/>
+          <MainInfoTable />
+          {/*<Divider style={{margin: "0px 0px 12px 0px"}}/>*/}
           <div style={{margin:0}}>
               <Row align="middle">
                 <Col><StateIcon component={HeatingSvg} run={(PLCMemory.W[290]&1)===1}/></Col><Col flex={1}><Typography.Title level={4} style={{margin:0}}>主加热</Typography.Title></Col>
                 <Col><StateIcon component={ConveyorSvg} run={(PLCMemory.W[291]&0x10)===0x10}/></Col><Col flex={1}><Typography.Title level={4} style={{margin:0}}>传送带</Typography.Title></Col>
-                {/*<IconDisplayer address="WB0311:01" icon={SoundSvg} label="超声波" rotate={90} />*/}
+                {/*<IconDisplayer address="WB0311:01" icon={SoundSvg} label="超声波" rotate={90} />
                 <IconDisplayer address="WB0291:12" icon={pumpSvg} label="风淋PUMP" rotate={90}/>
-                <IconDisplayer address="WB0291:13" icon={pumpSvg} label="入口排水" rotate={90}/>
+                <IconDisplayer address="WB0291:13" icon={pumpSvg} label="入口排水" rotate={90}/>*/}
                 <IconDisplayer address="WB0292:00" icon={ValveSvg} label={<span>N<sub>2</sub>气体</span>} />
                 <IconDisplayer address="WB0291:15" icon={ValveSvg} label={<span>H<sub>2</sub>气体</span>} />
-                <IconDisplayer address="WB0311:04" icon={ValveSvg} label="Sonic Air" />
+                <Col flex={8} />
+                {/*<IconDisplayer address="WB0311:04" icon={ValveSvg} label="Sonic Air" />*/}
               </Row>
           </div>
         </div>
