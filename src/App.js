@@ -222,13 +222,85 @@ var PLCMemory = {
 }
 var WarmUpRate = 1;
 var WSV = Array(48).fill(0)
+var TempCompensation = {
+            ...Array(24).fill(0).reduce((obj, entry, index) => {
+                obj[`L${index+1}`] = 0;
+                obj[`R${index+1}`] = 0;
+                return obj;
+            }, {})
+        }
 
-function GetIntervalDataDict(keys, data, baseAddress, interval, procFunc) {
-    if (procFunc==null) {
-        return Object.fromEntries(keys.map((k, index)=>([k, data[baseAddress+interval*index]])))
+function GetZonePV(name) {
+    if (name[0]==="L") {
+        return PLCMemory.D[(+name.slice(1)-1)*4] - TempCompensation[name]
     }
     else {
-        return Object.fromEntries(keys.map((k, index)=>([k, procFunc(data[baseAddress+interval*index])])))
+        return PLCMemory.D[(+name.slice(1)-1)*4+2] - TempCompensation[name]
+    }
+}
+
+function GetZoneTSV(name) {
+    if (name[0]==="L") {
+        return PLCMemory.D[(+name.slice(1)-1)*2+800] - TempCompensation[name]
+    }
+    else {
+        return PLCMemory.D[(+name.slice(1)-1)*2+801] - TempCompensation[name]
+    }
+}
+
+function GetZoneSV(name) {
+    if (name[0]==="L") {
+        return PLCMemory.D[(+name.slice(1)-1)*6+300] - TempCompensation[name]
+    }
+    else {
+        return PLCMemory.D[(+name.slice(1)-1)*6+303] - TempCompensation[name]
+    }
+}
+
+function SetZoneSV(name, value) {
+    if (name[0]==="L") {
+        WSV[(+name.slice(1)-1)*2] = value
+        window.ipcRenderer.send("plcWrite", `D${(+name.slice(1)-1)*6+300}`, Math.max(value + TempCompensation[name], 0))
+    } 
+    else {
+        WSV[(+name.slice(1)-1)*2+1] = value
+        window.ipcRenderer.send("plcWrite", `D${(+name.slice(1)-1)*6+303}`, Math.max(value + TempCompensation[name], 0))
+    }
+}
+
+function SetZoneTSV(name, value) {
+    if (name[0]==="L") {
+        window.ipcRenderer.send("plcWrite", `D${(+name.slice(1)-1)*2+800}`, Math.max(value + TempCompensation[name], 0)) //set TSV
+    } 
+    else {
+        window.ipcRenderer.send("plcWrite", `D${(+name.slice(1)-1)*2+801}`, Math.max(value + TempCompensation[name], 0)) //set TSV
+    }
+}
+
+function GetZoneMV(name) {
+    if (name[0]==="L") {
+        return PLCMemory.D[(+name.slice(1)-1)*4+1]
+    }
+    else {
+        return PLCMemory.D[(+name.slice(1)-1)*4+3]
+    }
+}
+
+//function GetIntervalDataDict(keys, data, baseAddress, interval, procFunc) {
+//    if (procFunc==null) {
+//        return Object.fromEntries(keys.map((k, index)=>([k, data[baseAddress+interval*index]])))
+//    }
+//    else {
+//        return Object.fromEntries(keys.map((k, index)=>([k, procFunc(data[baseAddress+interval*index])])))
+//    }
+//}
+
+function GetFuncDataDict(keys, getDataFunc, procFunc) {
+    if (procFunc==null) {
+        return Object.fromEntries(keys.map((k, index)=>([k, getDataFunc(k)])))
+    }
+    else {
+        return Object.fromEntries(keys.map((k, index)=>([k, procFunc(getDataFunc(k))])))
     }
 }
 
@@ -310,6 +382,171 @@ const writeConfigFile = async (confData) => {
         })
     }
     return
+}
+
+const readCompensationFile = async () => {
+    let r = new Promise((resolve, reject) => {
+        fs.readFile("./TempCompensation.json", 'utf-8', (err, data) => {
+            if(err){
+                //alert("An error ocurred reading the file :" + err.message);
+                reject(err)
+            }
+            else {
+                //console.log(data)
+                resolve({
+                    ...JSON.parse(data)
+                })
+            }
+        });
+    })
+    return r
+}
+
+const writeCompensationFile = async (confData) => {
+    fs.writeFile("./TempCompensation.json", JSON.stringify(confData), (err) => {
+        if(err){
+            alert("An error ocurred reading the file :" + err.message);
+        }
+    })
+}
+
+class SVSettingModal extends React.Component {
+    constructor(props) {
+        super(props)
+        this.state = {
+            ...Array(24).fill(0).reduce((obj, entry, index) => {
+                obj[`L${index+1}`] = 0;
+                obj[`R${index+1}`] = 0;
+                return obj;
+            }, {})
+        }
+    }
+    changeHandle = (name, value) => {
+        this.setState({
+            [name]: value
+        })
+    }
+    onSetSV = () => {
+        Object.entries(this.state).map(d=>{
+            SetZoneSV(d[0], d[1])
+            return null
+        })
+    }
+    render() {
+        return (
+            <Modal
+                title="SV设置"
+                width={800}
+                onCancel={this.props.onClose}
+                cancelButtonProps={{style:{display:"none"}}}
+                onOk={this.props.onClose}
+                okText="关闭"
+                visible={this.props.visible}
+            >
+                <Button type="primary" onClick={()=>{this.onSetSV()}}>设 置</Button>
+                <Divider/>
+                <Descriptions layout="horizontal" column={2} bordered>
+                    {Array(24).fill(0).map((value, index)=>(
+                        <Fragment key={index}>
+                        <Descriptions.Item label={`L${index+1}`}>
+                            <InputNumber min={-100} max={900} step={1} 
+                                value={this.state[`L${index+1}`]} 
+                                style={{width:120}} 
+                                onChange={(value)=>{this.changeHandle(`L${index+1}`, value)}}
+                            />
+                        </Descriptions.Item>
+                        <Descriptions.Item label={`R${index+1}`}>
+                            <InputNumber min={-100} max={900} step={1} 
+                                value={this.state[`R${index+1}`]}
+                                style={{width:120}} 
+                                onChange={(value)=>{this.changeHandle(`R${index+1}`, value)}}
+                            />
+                        </Descriptions.Item>
+                        </Fragment>
+                    ))}
+                </Descriptions>
+            </Modal>
+        )
+    }
+}
+
+class TempCompensationModal extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            ...Array(24).fill(0).reduce((obj, entry, index) => {
+                obj[`L${index+1}`] = 0;
+                obj[`R${index+1}`] = 0;
+                return obj;
+            }, {})
+        }
+    }
+    //componentDidUpdate(prevProps) {
+    //    if (prevProps.visible===false && this.props.visible===true) {
+    //        readCompensationFile()
+    //        .then((data)=>{
+    //            console.log(data)
+    //        })
+    //        //.catch(error => {
+    //        //    console.log("Read compensation file error:", error)
+    //        //})
+    //    }
+    //}
+    changeHandle = (reg, value) => {
+        this.setState({
+            [reg]: value
+        })
+    }
+    onSave = () => {
+        TempCompensation = {
+            ...this.state
+        }
+        writeCompensationFile(TempCompensation)
+    }
+    render() {
+        return (
+            <Drawer
+              title="温度补偿"
+              placement="left"
+              size="small"
+              width={600}
+              closable={true}
+              destroyOnClose={true}
+              maskClosable={false}
+              onClose={() => {
+                this.props.onClose()
+              }}
+              visible={this.props.visible}
+            >
+                <Row justify="end">
+                    <Col>
+                        <Button type="primary" onClick={()=>{this.onSave()}}>应 用</Button>
+                    </Col>
+                </Row>
+                <Divider>补偿温度</Divider>
+                <Descriptions layout="horizontal" column={2} bordered>
+                    {Array(24).fill(0).map((value, index)=>(
+                        <Fragment key={index}>
+                        <Descriptions.Item label={`L${index+1}`}>
+                            <InputNumber min={-100} max={100} step={1} 
+                                value={this.state[`L${index+1}`]===0?TempCompensation[`L${index+1}`]:this.state[`L${index+1}`]} 
+                                style={{width:120}} 
+                                onChange={(value)=>{this.changeHandle(`L${index+1}`, value)}}
+                            />
+                        </Descriptions.Item>
+                        <Descriptions.Item label={`R${index+1}`}>
+                            <InputNumber min={-100} max={100} step={1} 
+                                value={this.state[`R${index+1}`]===0?TempCompensation[`R${index+1}`]:this.state[`R${index+1}`]}
+                                style={{width:120}} 
+                                onChange={(value)=>{this.changeHandle(`R${index+1}`, value)}}
+                            />
+                        </Descriptions.Item>
+                        </Fragment>
+                    ))}
+                </Descriptions>
+            </Drawer>
+        )
+    }
 }
 
 class AlarmsModal extends React.Component {
@@ -432,14 +669,18 @@ class LoadingModal extends React.Component {
             WSV = Array(48).fill(0);
         for(let i=0;i<24;i++) {
             if(this.state.data.data[`L${i+1}`]!==null) {
-                window.ipcRenderer.send("plcWrite", `D${i*2+800}`, this.state.data.data[`L${i+1}`]) //set TSV
+                //window.ipcRenderer.send("plcWrite", `D${i*2+800}`, this.state.data.data[`L${i+1}`]) //set TSV
+                SetZoneTSV(`L${i+1}`, this.state.data.data[`L${i+1}`])
                 if(this.state.clearSVOnApply)
-                    window.ipcRenderer.send("plcWrite", `D${i*6+300}`, 0) //clear SV
+                    SetZoneSV(`L${i+1}`, 0)
+                    //window.ipcRenderer.send("plcWrite", `D${i*6+300}`, 0) //clear SV
             }
             if(this.state.data.data[`R${i+1}`]!==null) {
-                window.ipcRenderer.send("plcWrite", `D${i*2+801}`, this.state.data.data[`R${i+1}`]) //set TSV
+                //window.ipcRenderer.send("plcWrite", `D${i*2+801}`, this.state.data.data[`R${i+1}`]) //set TSV
+                SetZoneTSV(`R${i+1}`, this.state.data.data[`R${i+1}`])
                 if(this.state.clearSVOnApply)
-                    window.ipcRenderer.send("plcWrite", `D${i*6+303}`, 0) //clear SV
+                    SetZoneSV(`R${i+1}`, 0)
+                    //window.ipcRenderer.send("plcWrite", `D${i*6+303}`, 0) //clear SV
             }
         }
         if(this.state.data.data.conveyor!==null)
@@ -988,6 +1229,7 @@ class WarmUpSettingModal extends React.Component {
             WarmUpRate: null,
             powerDetailVisible: false,
             svSetVisible: false,
+            SVModalVisible: false,
         }
     }
     onShortCut = (event) => {
@@ -1111,18 +1353,8 @@ class WarmUpSettingModal extends React.Component {
                         <Row  align="middle" justify="end" gutter={[4,4]}>
                             {this.state.svSetVisible?
                             <Col>
-                                <InputNumber value={this.state.SV} min={0} max={900} step={1}
-                                    onChange={(value)=>{this.setState({SV:value})}}
-                                />
-                                <Popconfirm
-                                    placement="topLeft"
-                                    title={"是否设置SV"}
-                                    onConfirm={this.onSetSV}
-                                    okText="确定"
-                                    cancelText="放弃"
-                                >
-                                    <Button type="primary">设置SV</Button>
-                                </Popconfirm>
+                                <SVSettingModal visible={this.state.SVModalVisible} onClose={()=>{this.setState({SVModalVisible:false})}}/>
+                                <Button type="primary" onClick={()=>{this.setState({SVModalVisible:true})}}>设置SV</Button>
                             </Col>:null}
                             <Col>
                                 <Popconfirm
@@ -1203,14 +1435,18 @@ class ZoneTSVSettingModal extends React.Component {
             WSV = Array(48).fill(0);
         for(let i=0;i<24;i++) {
             if(this.state[`L${i+1}`]!==null) {
-                window.ipcRenderer.send("plcWrite", `D${i*2+800}`, this.state[`L${i+1}`]) //set TSV
+                //window.ipcRenderer.send("plcWrite", `D${i*2+800}`, this.state[`L${i+1}`]) //set TSV
+                SetZoneTSV(`L${i+1}`, this.state[`L${i+1}`])
                 if(this.state.clearSVOnApply)
-                    window.ipcRenderer.send("plcWrite", `D${i*6+300}`, 0) //clear SV
+                    SetZoneSV(`L${i+1}`, 0)
+                    //window.ipcRenderer.send("plcWrite", `D${i*6+300}`, 0) //clear SV
             }
             if(this.state[`R${i+1}`]!==null) {
                 window.ipcRenderer.send("plcWrite", `D${i*2+801}`, this.state[`R${i+1}`]) //set TSV
+                SetZoneTSV(`R${i+1}`, this.state[`R${i+1}`])
                 if(this.state.clearSVOnApply)
-                    window.ipcRenderer.send("plcWrite", `D${i*6+303}`, 0) //clear SV
+                    SetZoneSV(`R${i+1}`, 0)
+                    //window.ipcRenderer.send("plcWrite", `D${i*6+303}`, 0) //clear SV
             }
         }
         if(this.state.conveyor!==null)
@@ -1228,8 +1464,8 @@ class ZoneTSVSettingModal extends React.Component {
     onSave = () => {
         writeConfigFile({
             ...Array(24).fill(0).reduce((obj, entry, index) => {
-                obj[`L${index+1}`] = this.state[`L${index+1}`]!==null?this.state[`L${index+1}`]:PLCMemory.D[index*2+800];
-                obj[`R${index+1}`] = this.state[`R${index+1}`]!==null?this.state[`R${index+1}`]:PLCMemory.D[index*2+801];
+                obj[`L${index+1}`] = this.state[`L${index+1}`]!==null?this.state[`L${index+1}`]:GetZoneTSV(`L${index+1}`);
+                obj[`R${index+1}`] = this.state[`R${index+1}`]!==null?this.state[`R${index+1}`]:GetZoneTSV(`R${index+1}`);
                 return obj;
             }, {conveyor: this.state.conveyor===null?Math.round(PLCMemory.D[292] * 310.3 / 4000*10)/10:this.state.conveyor})
         })
@@ -1344,7 +1580,7 @@ class ZoneTSVSettingModal extends React.Component {
                                 let tempTemp = {...this.state}
                                 for(let i=0;i<24;i++) {
                                     if (tempTemp[`L${i+1}`]===null) {
-                                        tempTemp[`R${i+1}`] = PLCMemory.D[i*2+800]
+                                        tempTemp[`R${i+1}`] = GetZoneTSV(`L${i+1}`) //PLCMemory.D[i*2+800]
                                     }
                                     else {
                                         tempTemp[`R${i+1}`] = tempTemp[`L${i+1}`]
@@ -1364,8 +1600,8 @@ class ZoneTSVSettingModal extends React.Component {
                                 let tempTemp = {...this.state}
                                 for(let i=0;i<24;i++) {
                                     if (tempTemp[`L1`]===null) {
-                                        tempTemp[`R${i+1}`] = PLCMemory.D[800]
-                                        tempTemp[`L${i+1}`] = PLCMemory.D[800]
+                                        tempTemp[`R${i+1}`] = GetZoneTSV("L1") //PLCMemory.D[800]
+                                        tempTemp[`L${i+1}`] = GetZoneTSV("L1") //PLCMemory.D[800]
                                     }
                                     else {
                                         tempTemp[`L${i+1}`] = tempTemp[`L1`]
@@ -1386,14 +1622,14 @@ class ZoneTSVSettingModal extends React.Component {
                         <Fragment key={index}>
                         <Descriptions.Item label={`L${index+1}`}>
                             <InputNumber min={0} max={900} step={1} 
-                                value={this.state[`L${index+1}`]!==null?this.state[`L${index+1}`]:PLCMemory.D[index*2+800]} 
+                                value={this.state[`L${index+1}`]!==null?this.state[`L${index+1}`]:GetZoneTSV(`L${index+1}`)} 
                                 style={{width:120}} 
                                 onChange={(value)=>{this.changeHandle(`L${index+1}`, value)}}
                             />
                         </Descriptions.Item>
                         <Descriptions.Item label={`R${index+1}`}>
                             <InputNumber min={0} max={900} step={1} 
-                                value={this.state[`R${index+1}`]!==null?this.state[`R${index+1}`]:PLCMemory.D[index*2+801]}
+                                value={this.state[`R${index+1}`]!==null?this.state[`R${index+1}`]:GetZoneTSV(`R${index+1}`)}
                                 style={{width:120}} 
                                 onChange={(value)=>{this.changeHandle(`R${index+1}`, value)}}
                             />
@@ -2204,6 +2440,7 @@ class App extends React.Component {
             warmUpSettingVisible: false,
             wetterSettingVisible: false,
             gasSettingVisible: false,
+            tempCompensationVisible: false,
             loadingStart: false,
             alarmVisible: false,
             warmUpSecond: 0,
@@ -2222,31 +2459,38 @@ class App extends React.Component {
         //window.ipcRenderer.send("plcWrite", "WB0311:01", 0)
     }
     SFWarmUp = () => {
+        console.log("SFWarmUp")
         let {warmUpSecond} = this.state
-        warmUpSecond = (warmUpSecond + 1) % 60
-        this.setState({
-            warmUpSecond: warmUpSecond
-        })
+        if ((PLCMemory.W[290]&1)===1) {
+            warmUpSecond = (warmUpSecond + 1) % 60
+            this.setState({
+                warmUpSecond: warmUpSecond
+            })
+        }
         if(warmUpSecond === 0) {
             if ((PLCMemory.W[290]&1)===1) {
                 for(let i=0;i<24;i++) {
-                    if (PLCMemory.D[i*2+800] > WSV[i*2] + WarmUpRate) {
+                    //if (PLCMemory.D[i*2+800] > WSV[i*2] + WarmUpRate) {
+                    if (GetZoneTSV(`L${i+1}`) > WSV[i*2] + WarmUpRate) {
                         WSV[i*2] += WarmUpRate
                     }
                     else {
-                        WSV[i*2] = PLCMemory.D[i*2+800]
+                        WSV[i*2] = GetZoneTSV(`L${i+1}`)//PLCMemory.D[i*2+800]
                     }
-                    if (PLCMemory.D[i*6+300] !== WSV[i*2])
-                        window.ipcRenderer.send("plcWrite", `D${i*6+300}`, WSV[i*2])
+                    if (GetZoneSV(`L${i+1}`) !== WSV[i*2])
+                        SetZoneSV(`L${i+1}`, WSV[i*2])
+                        //window.ipcRenderer.send("plcWrite", `D${i*6+300}`, WSV[i*2])
 
-                    if (PLCMemory.D[i*2+801] > WSV[i*2+1] + WarmUpRate) {
+                    //if (PLCMemory.D[i*2+801] > WSV[i*2+1] + WarmUpRate) {
+                    if (GetZoneTSV(`R${i+1}`) > WSV[i*2+1] + WarmUpRate) {
                         WSV[i*2 + 1] += WarmUpRate
                     }
                     else {
-                        WSV[i*2 + 1] = PLCMemory.D[i*2+801]
+                        WSV[i*2 + 1] = GetZoneTSV(`R${i+1}`)//PLCMemory.D[i*2+801]
                     }
-                    if (PLCMemory.D[i*6+303] !== WSV[i*2+1])
-                        window.ipcRenderer.send("plcWrite", `D${i*6+303}`, WSV[i*2+1])
+                    if (GetZoneSV(`R${i+1}`) !== WSV[i*2+1])
+                        SetZoneSV(`R${i+1}`, WSV[i*2+1])
+                        //window.ipcRenderer.send("plcWrite", `D${i*6+303}`, WSV[i*2+1])
                 }
             }
         }
@@ -2258,6 +2502,11 @@ class App extends React.Component {
     componentDidMount() {
         //console.log("componentDidMount")
         this.warmUpIntervalTimer = setInterval(this.SFWarmUp, 1000)
+        readCompensationFile()
+        .then(data=>{
+            TempCompensation = data
+            this.forceUpdate();
+        })
         //this.alarmCheckIntervalTimer = setInterval(this.AlarmCheck, 1000)
         //const menu = new window.remote.Menu()
         //menu.append(new window.remote.MenuItem({ label: 'MenuItem1', click() { console.log('item 1 clicked') } }))
@@ -2306,6 +2555,11 @@ class App extends React.Component {
         window.ipcRenderer.on("SF_MENU_AlARMVIEWER", (event) => {
             this.setState({
                 alarmVisible: true,
+            })
+        });
+        window.ipcRenderer.on("SF_MENU_TEMPCOMPENSATION", (event) => {
+            this.setState({
+                tempCompensationVisible: true,
             })
         });
         window.ipcRenderer.on("SF_MENU_START", (event) => {
@@ -2380,7 +2634,9 @@ class App extends React.Component {
             //console.log(JSON.stringify(this.state[address[0]]) !== JSON.stringify(tempData))
             //console.log(lZone)
             if (JSON.stringify(PLCMemory[address[0]]) !== JSON.stringify(tempData)) {
+                console.log("Update PLC data")
                 PLCMemory[address[0]] = tempData;
+                this.forceUpdate();
                 //this.setState({
                 //    //ltempZone: ltempZone,
                 //    //rtempZone: rtempZone,
@@ -2400,40 +2656,49 @@ class App extends React.Component {
     //    //console.log(tempZone);
     //}
     render() {
+      console.log("app render")
       let lzone = [
             {
               name: "PV",
-            ...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 0, 4)
+            //...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 0, 4)
+              ...GetFuncDataDict(zoneNames.L, GetZonePV)
             },
             {
               name: "TSV",
-            ...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 800, 2)
+            //...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 800, 2)
+              ...GetFuncDataDict(zoneNames.L, GetZoneTSV)
             },
             {
               name: "SV",
-            ...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 300, 6)
+            //...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 300, 6)
+              ...GetFuncDataDict(zoneNames.L, GetZoneSV)
             },
             {
               name: "MV",
-            ...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 1, 4, d=>(d/10))
+            //...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 1, 4, d=>(d/10))
+              ...GetFuncDataDict(zoneNames.L, GetZoneMV, d=>(d/10))
             }
       ]
         let rzone = [
             {
               name: "PV",
-            ...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 2, 4)
+            //...GetIntervalDataDict(zoneNames.R, PLCMemory.D, 2, 4)
+              ...GetFuncDataDict(zoneNames.R, GetZonePV)
             },
             {
               name: "TSV",
-            ...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 801, 2)
+            //...GetIntervalDataDict(zoneNames.R, PLCMemory.D, 801, 2)
+              ...GetFuncDataDict(zoneNames.R, GetZoneTSV)
             },
             {
               name: "SV",
-            ...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 303, 6)
+            //...GetIntervalDataDict(zoneNames.R, PLCMemory.D, 303, 6)
+              ...GetFuncDataDict(zoneNames.R, GetZoneSV)
             },
             {
               name: "MV",
-            ...GetIntervalDataDict(zoneNames.L, PLCMemory.D, 3, 4, d=>(d/10))
+            //...GetIntervalDataDict(zoneNames.R, PLCMemory.D, 3, 4, d=>(d/10))
+              ...GetFuncDataDict(zoneNames.R, GetZoneMV, d=>(d/10))
             }
         ]
         let headBtns = [
@@ -2480,6 +2745,10 @@ class App extends React.Component {
             <GasSettingDrawer
                 visible={this.state.gasSettingVisible} 
                 onClose={()=>this.setState({gasSettingVisible:false})}
+            />
+            <TempCompensationModal
+                visible={this.state.tempCompensationVisible} 
+                onClose={()=>this.setState({tempCompensationVisible:false})}
             />
             <LoadingModal
                 start={this.state.loadingStart}
@@ -2544,10 +2813,12 @@ class App extends React.Component {
           <Tabs type="card">
             <Tabs.TabPane tab={<span><LineChartOutlined />Zone Chart</span>} key="1">
               <ChartWrapper>
-                <TempChart data={Array(24).fill().map((d, index)=>({name:`L${index+1}`, 'PV':PLCMemory.D[index*4], 'TSV':PLCMemory.D[index*2+800], 'SV':PLCMemory.D[index*6+300], 'MV':PLCMemory.D[index*4+1]}))} />
+          {/*<TempChart data={Array(24).fill().map((d, index)=>({name:`L${index+1}`, 'PV':PLCMemory.D[index*4], 'TSV':PLCMemory.D[index*2+800], 'SV':PLCMemory.D[index*6+300], 'MV':PLCMemory.D[index*4+1]}))} />*/}
+                <TempChart data={Array(24).fill().map((d, index)=>({name:`L${index+1}`, 'PV':GetZonePV(`L${index+1}`), 'TSV':GetZoneTSV(`L${index+1}`), 'SV':GetZoneSV(`L${index+1}`), 'MV':GetZoneMV(`L${index+1}`)}))} />
               </ChartWrapper>
               <ChartWrapper>
-                <TempChart data={Array(24).fill().map((d, index)=>({name:`R${index+1}`, 'PV':PLCMemory.D[index*4+2], 'TSV':PLCMemory.D[index*2+801], 'SV':PLCMemory.D[index*6+303], 'MV':PLCMemory.D[index*4+3]}))} />
+          {/*<TempChart data={Array(24).fill().map((d, index)=>({name:`R${index+1}`, 'PV':PLCMemory.D[index*4+2], 'TSV':PLCMemory.D[index*2+801], 'SV':PLCMemory.D[index*6+303], 'MV':PLCMemory.D[index*4+3]}))} />*/}
+                <TempChart data={Array(24).fill().map((d, index)=>({name:`R${index+1}`, 'PV':GetZonePV(`R${index+1}`), 'TSV':GetZoneTSV(`R${index+1}`), 'SV':GetZoneSV(`R${index+1}`), 'MV':GetZoneMV(`R${index+1}`)}))} />
               </ChartWrapper>
             </Tabs.TabPane>
             <Tabs.TabPane tab={<span><TableOutlined />Zone Table</span>} key="2">

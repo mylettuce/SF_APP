@@ -18,8 +18,8 @@ jobs:
       - name: Install modules
         run: yarn install
 
-      - name: Build
-        run: yarn build
+        #- name: Build
+        #run: yarn build
 
         #- name: dist
         #run: yarn dist

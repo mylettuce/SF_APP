@@ -229,7 +229,14 @@ function createWindow () {
                     click: async () => {
                         win.webContents.send("SF_MENU_GASSETTING")
                     }
-                }
+                },
+                {
+                    label: "温度补偿管理",
+                    accelerator: "CmdOrCtrl+N",
+                    click: async () => {
+                        win.webContents.send("SF_MENU_TEMPCOMPENSATION")
+                    }
+                },
             ]
         },
         {
