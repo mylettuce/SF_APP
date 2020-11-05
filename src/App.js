@@ -14,8 +14,26 @@ import {ReactComponent as ValveSvg} from "./valve.svg"
 import {ReactComponent as openUpSvg} from "./up-arrows-angles-couple.svg"
 
 //const fs = window.remote.require('fs')
-//const app = window.require('electron').remote
+//const app = window.require('electron').remote.app
 const fs = window.remote.require('fs')
+//const app = window.remote.require('app')
+
+//const basepath  = app.getPath("exe");
+//var basepath = process.env.PORTABLE_EXECUTABLE_DIR;
+//if (basepath === undefined) {
+//    const app = window.require('electron').remote.app
+//    basepath  = app.getAppPath();
+//}
+//console.log(process.env.PORTABLE_EXECUTABLE_DIR, basepath);
+
+function getBasePath() {
+    if (window.remote.process.env.PORTABLE_EXECUTABLE_DIR) {
+        return window.remote.process.env.PORTABLE_EXECUTABLE_DIR;
+    }
+    else {
+        return '.';
+    }
+}
 
 const zoneNames = {
     L:['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9', 'L10', 'L11', 'L12', 'L13', 'L14', 'L15', 'L16', 'L17', 'L18', 'L19', 'L20', 'L21', 'L22', 'L23', 'L24'],
@@ -405,7 +423,7 @@ const writeConfigFile = async (confData) => {
 
 const readCompensationFile = async () => {
     let r = new Promise((resolve, reject) => {
-        fs.readFile("./TempCompensation.json", 'utf-8', (err, data) => {
+        fs.readFile(getBasePath() + "\\TempCompensation.json", 'utf-8', (err, data) => {
             if(err){
                 //alert("An error ocurred reading the file :" + err.message);
                 reject(err)
@@ -422,7 +440,7 @@ const readCompensationFile = async () => {
 }
 
 const writeCompensationFile = async (confData) => {
-    fs.writeFile("./TempCompensation.json", JSON.stringify(confData), (err) => {
+    fs.writeFile(getBasePath() + "\\TempCompensation.json", JSON.stringify(confData), (err) => {
         if(err){
             alert("An error ocurred reading the file :" + err.message);
         }
@@ -948,15 +966,15 @@ class GasSettingDrawer extends React.Component {
                 <Divider orientation="center">N<sub>2</sub></Divider>
                 <Descriptions title={<span>N<sub>2</sub> Bout #1~2</span>} bordered>
                     <Descriptions.Item label="PV">
-                        {PLCMemory.D[251]/10} l/min
+                        {PLCMemory.D[251]} x0.1 l/min
                     </Descriptions.Item>
                     <Descriptions.Item label="SV">
-                        <InputNumber min={0} max={1000} step={0.1} style={{
+                        <InputNumber min={0} max={1000} step={1} style={{
                                 width:72,
                                 backgroundColor: this.state.N2mv1===null||this.state.N2mv1===PLCMemory.D[230]?null:"#FFEBEE"
                             }}
-                            value={this.state.N2mv1===null?PLCMemory.D[230]/10:this.state.N2mv1/10} 
-                            onChange={value=>this.setState({N2mv1:value*10})}
+                            value={this.state.N2mv1===null?PLCMemory.D[230]:this.state.N2mv1} 
+                            onChange={value=>this.setState({N2mv1:value})}
                         /> l/min
                     </Descriptions.Item>
                     <Descriptions.Item label="MV">
@@ -965,15 +983,15 @@ class GasSettingDrawer extends React.Component {
                 </Descriptions>
                 <Descriptions title={<span>N<sub>2</sub> Bout #3~4</span>} bordered>
                     <Descriptions.Item label="PV">
-                        {PLCMemory.D[253]/10} l/min
+                        {PLCMemory.D[253]} x0.1 l/min
                     </Descriptions.Item>
                     <Descriptions.Item label="SV">
-                        <InputNumber min={0} max={1000} step={0.1} style={{
+                        <InputNumber min={0} max={1000} step={1} style={{
                                 width:72,
                                 backgroundColor: this.state.N2mv2===null||this.state.N2mv2===PLCMemory.D[232]?null:"#FFEBEE"
                             }}
-                            value={this.state.N2mv2===null?PLCMemory.D[232]/10:this.state.N2mv2/10} 
-                            onChange={value=>this.setState({N2mv2:value*10})}
+                            value={this.state.N2mv2===null?PLCMemory.D[232]:this.state.N2mv2} 
+                            onChange={value=>this.setState({N2mv2:value})}
                         /> l/min
                     </Descriptions.Item>
                     <Descriptions.Item label="MV">
@@ -982,15 +1000,15 @@ class GasSettingDrawer extends React.Component {
                 </Descriptions>
                <Descriptions title={<span>N<sub>2</sub> Bout #5~6</span>} bordered>
                     <Descriptions.Item label="PV">
-                        {PLCMemory.D[255]/10} l/min
+                        {PLCMemory.D[255]} x0.1 l/min
                     </Descriptions.Item>
                     <Descriptions.Item label="SV">
-                        <InputNumber min={0} max={1000} step={0.1} style={{
+                        <InputNumber min={0} max={1000} step={1} style={{
                                 width:72,
                                 backgroundColor: this.state.N2mv3===null||this.state.N2mv3===PLCMemory.D[234]?null:"#FFEBEE"
                             }}
-                            value={this.state.N2mv3===null?PLCMemory.D[234]/10:this.state.N2mv3/10} 
-                            onChange={value=>this.setState({N2mv3:value*10})}
+                            value={this.state.N2mv3===null?PLCMemory.D[234]:this.state.N2mv3} 
+                            onChange={value=>this.setState({N2mv3:value})}
                         /> l/min
                     </Descriptions.Item>
                     <Descriptions.Item label="MV">
@@ -999,15 +1017,15 @@ class GasSettingDrawer extends React.Component {
                 </Descriptions>
                <Descriptions title={<span>N<sub>2</sub> Bout #7/MR</span>} bordered>
                     <Descriptions.Item label="PV">
-                        {PLCMemory.D[257]/10} cc/min
+                        {PLCMemory.D[257]} x0.1 l/min
                     </Descriptions.Item>
                     <Descriptions.Item label="SV">
-                        <InputNumber min={0} max={1000} step={0.1} style={{
+                        <InputNumber min={0} max={1000} step={1} style={{
                                 width:72,
                                 backgroundColor: this.state.N2mv4===null||this.state.N2mv4===PLCMemory.D[236]?null:"#FFEBEE"
                             }}
-                            value={this.state.N2mv4===null?PLCMemory.D[236]/10:this.state.N2mv4/10} 
-                            onChange={value=>this.setState({N2mv4:value*10})}
+                            value={this.state.N2mv4===null?PLCMemory.D[236]:this.state.N2mv4} 
+                            onChange={value=>this.setState({N2mv4:value})}
                         /> cc/min
                     </Descriptions.Item>
                     <Descriptions.Item label="MV">
@@ -1018,7 +1036,7 @@ class GasSettingDrawer extends React.Component {
                 <Divider orientation="center">H<sub>2</sub></Divider>
                 <Descriptions title={<span>H<sub>2</sub> Bout #1~2</span>} bordered>
                     <Descriptions.Item label="PV">
-                        {PLCMemory.D[252]/100} l/min
+                        {PLCMemory.D[252]/100} cc/min
                     </Descriptions.Item>
                     <Descriptions.Item label="SV">
                         <InputNumber min={0} max={1000} step={0.01} style={{
@@ -1035,7 +1053,7 @@ class GasSettingDrawer extends React.Component {
                 </Descriptions>
                 <Descriptions title={<span>H<sub>2</sub> Bout #3~4</span>} bordered>
                     <Descriptions.Item label="PV">
-                        {PLCMemory.D[254]/100} l/min
+                        {PLCMemory.D[254]/100} cc/min
                     </Descriptions.Item>
                     <Descriptions.Item label="SV">
                         <InputNumber min={0} max={1000} step={0.01} style={{
@@ -1052,7 +1070,7 @@ class GasSettingDrawer extends React.Component {
                 </Descriptions>
                <Descriptions title={<span>H<sub>2</sub> Bout #5~6</span>} bordered>
                     <Descriptions.Item label="PV">
-                        {PLCMemory.D[256]/100} l/min
+                        {PLCMemory.D[256]/100} cc/min
                     </Descriptions.Item>
                     <Descriptions.Item label="SV">
                         <InputNumber min={0} max={1000} step={0.01} style={{
@@ -2563,7 +2581,7 @@ class App extends React.Component {
         console.log(alarms);
     }
     componentDidMount() {
-        //console.log("componentDidMount")
+        console.log("App componentDidMount")
         this.warmUpIntervalTimer = setInterval(this.SFWarmUp, 1000)
         readCompensationFile()
         .then(data=>{

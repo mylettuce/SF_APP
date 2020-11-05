@@ -289,7 +289,7 @@ function createWindow () {
   }
 
   // 打开开发者工具。
-  //win.webContents.openDevTools();
+  win.webContents.openDevTools();
 
   let intervalTimer = setInterval(()=>{
       //console.log("Ontimer")
