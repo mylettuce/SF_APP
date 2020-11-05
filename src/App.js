@@ -230,6 +230,24 @@ var TempCompensation = {
             }, {})
         }
 
+function GetWSV(name) {
+    if (name[0]==="L") {
+        return WSV[(+name.slice(1)-1)*2] - TempCompensation[name]
+    }
+    else {
+        return WSV[(+name.slice(1)-1)*2+1] - TempCompensation[name]
+    }
+}
+
+function SetWSV(name, value) {
+    if (name[0]==="L") {
+        WSV[(+name.slice(1)-1)*2] = value + TempCompensation[name]
+    }
+    else {
+        WSV[(+name.slice(1)-1)*2+1] = value + TempCompensation[name]
+    }
+}
+
 function GetZonePV(name) {
     if (name[0]==="L") {
         return PLCMemory.D[(+name.slice(1)-1)*4] - TempCompensation[name]
@@ -258,12 +276,13 @@ function GetZoneSV(name) {
 }
 
 function SetZoneSV(name, value) {
+    SetWSV(name, value)
     if (name[0]==="L") {
-        WSV[(+name.slice(1)-1)*2] = value
+        //WSV[(+name.slice(1)-1)*2] = value
         window.ipcRenderer.send("plcWrite", `D${(+name.slice(1)-1)*6+300}`, Math.max(value + TempCompensation[name], 0))
     } 
     else {
-        WSV[(+name.slice(1)-1)*2+1] = value
+        //WSV[(+name.slice(1)-1)*2+1] = value
         window.ipcRenderer.send("plcWrite", `D${(+name.slice(1)-1)*6+303}`, Math.max(value + TempCompensation[name], 0))
     }
 }
@@ -428,8 +447,18 @@ class SVSettingModal extends React.Component {
     }
     onSetSV = () => {
         Object.entries(this.state).map(d=>{
-            SetZoneSV(d[0], d[1])
+            if ((+d[1]) !== 0) {
+                SetZoneSV(d[0], d[1])
+            }
             return null
+        })
+    }
+    onLxToRx = () => {
+        Array(24).fill(0).map((d, i)=>{
+            this.setState({
+                [`R${i+1}`]: this.state[`L${i+1}`]
+            })
+            return null;
         })
     }
     render() {
@@ -443,7 +472,30 @@ class SVSettingModal extends React.Component {
                 okText="关闭"
                 visible={this.props.visible}
             >
-                <Button type="primary" onClick={()=>{this.onSetSV()}}>设 置</Button>
+                <Row gutter={[8, 8]}>
+                    <Col flex={1}>
+                        <Row>
+                            <Col>
+                                <Button type="primary" onClick={()=>{this.onLxToRx()}}>Lx => Rx</Button>
+                            </Col>
+                        </Row>
+                    </Col>
+                    <Col flex={1}>
+                        <Row justify="end">
+                            <Col>
+                                <Popconfirm
+                                    placement="bottomLeft"
+                                    title={"是否设置SV"}
+                                    onConfirm={this.onSetSV}
+                                    okText="确定"
+                                    cancelText="放弃"
+                                >
+                                    <Button type="primary">设 置</Button>
+                                </Popconfirm>
+                            </Col>
+                        </Row>
+                    </Col>
+                </Row>
                 <Divider/>
                 <Descriptions layout="horizontal" column={2} bordered>
                     {Array(24).fill(0).map((value, index)=>(
@@ -498,8 +550,16 @@ class TempCompensationModal extends React.Component {
         })
     }
     onSave = () => {
+        Array(24).fill(0).map((d, i)=>{
+            let dif = TempCompensation[`L${i+1}`] - this.state[`L${i+1}`];
+            SetZoneTSV(`L${i+1}`, GetZoneTSV(`L${i+1}`) - dif)
+            return null;
+        })
         TempCompensation = {
-            ...this.state
+            ...TempCompensation,
+            ...Object.fromEntries(
+                Object.entries(this.state).filter((d)=>d[1]!==0)
+            )
         }
         writeCompensationFile(TempCompensation)
     }
@@ -2251,8 +2311,8 @@ class MainInfoTable extends React.Component {
                             <Card bodyStyle={{padding:"12px 36px"}}>
                             <Statistic
                                 title="Wetter #1" 
-                                value={PLCMemory.D[144]}
-                                suffix={<span> / {PLCMemory.D[516]}</span>}
+                                value={PLCMemory.D[146]}
+                                suffix={<span> / {PLCMemory.D[519]}</span>}
                             />
                             </Card>
                         </Col>
@@ -2260,8 +2320,8 @@ class MainInfoTable extends React.Component {
                             <Card bodyStyle={{padding:"12px 36px"}}>
                             <Statistic
                                 title="Wetter #2"
-                                value={PLCMemory.D[146]}
-                                suffix={<span> / {PLCMemory.D[519]}</span>}
+                                value={PLCMemory.D[144]}
+                                suffix={<span> / {PLCMemory.D[516]}</span>}
                             />
                             </Card>
                         </Col>
@@ -2471,25 +2531,28 @@ class App extends React.Component {
             if ((PLCMemory.W[290]&1)===1) {
                 for(let i=0;i<24;i++) {
                     //if (PLCMemory.D[i*2+800] > WSV[i*2] + WarmUpRate) {
-                    if (GetZoneTSV(`L${i+1}`) > WSV[i*2] + WarmUpRate) {
-                        WSV[i*2] += WarmUpRate
+                    if (GetZoneTSV(`L${i+1}`) > GetWSV(`L${i+1}`) + WarmUpRate) {
+                        //WSV[i*2] += WarmUpRate
+                        SetWSV(`L${i+1}`, GetWSV(`L${i+1}`) + WarmUpRate)
                     }
                     else {
-                        WSV[i*2] = GetZoneTSV(`L${i+1}`)//PLCMemory.D[i*2+800]
+                        SetWSV(`L${i+1}`, GetZoneTSV(`L${i+1}`))//PLCMemory.D[i*2+800]
                     }
-                    if (GetZoneSV(`L${i+1}`) !== WSV[i*2])
-                        SetZoneSV(`L${i+1}`, WSV[i*2])
+                    if (GetZoneSV(`L${i+1}`) !== GetWSV(`L${i+1}`))
+                        SetZoneSV(`L${i+1}`, GetWSV(`L${i+1}`))
                         //window.ipcRenderer.send("plcWrite", `D${i*6+300}`, WSV[i*2])
 
                     //if (PLCMemory.D[i*2+801] > WSV[i*2+1] + WarmUpRate) {
-                    if (GetZoneTSV(`R${i+1}`) > WSV[i*2+1] + WarmUpRate) {
-                        WSV[i*2 + 1] += WarmUpRate
+                    if (GetZoneTSV(`R${i+1}`) > GetWSV(`R${i+1}`) + WarmUpRate) {
+                        //WSV[i*2 + 1] += WarmUpRate
+                        SetWSV(`R${i+1}`, GetWSV(`R${i+1}`) + WarmUpRate)
                     }
                     else {
-                        WSV[i*2 + 1] = GetZoneTSV(`R${i+1}`)//PLCMemory.D[i*2+801]
+                        //WSV[i*2 + 1] = GetZoneTSV(`R${i+1}`)//PLCMemory.D[i*2+801]
+                        SetWSV(`R${i+1}`, GetZoneTSV(`R${i+1}`))
                     }
-                    if (GetZoneSV(`R${i+1}`) !== WSV[i*2+1])
-                        SetZoneSV(`R${i+1}`, WSV[i*2+1])
+                    if (GetZoneSV(`R${i+1}`) !== GetWSV(`R${i+1}`))
+                        SetZoneSV(`R${i+1}`, GetWSV(`R${i+1}`))
                         //window.ipcRenderer.send("plcWrite", `D${i*6+303}`, WSV[i*2+1])
                 }
             }
